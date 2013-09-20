@@ -1,0 +1,20 @@
+ 
+Description:
+ This utility can be used to detect button press events of the FoxG20
+ Board on-board push button and execute an arbitrary shell command.
+ Short and long button press events are distinguished, so 2 different 
+ shell commands can be specified to be run at the related event.
+
+Files:
+  foxbtn-exec.c
+  Source file, build on the FoxG20 with "gcc -o foxbtn-exec foxbtn-exec.c"
+
+  foxg20_btn_exec
+  Init script to start up the button detection automatically as a service 
+  on the FoxG20. As default behaviour, a short button press (<3s) will 
+  result in a reboot, a long button press in system shutdown.
+
+Installation:
+  
+Author:
+  Ondrej Wisniewski (ondrej.wisniewski@gmail.com)
