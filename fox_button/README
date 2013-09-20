@@ -1,4 +1,4 @@
- 
+
 Description:
  This utility can be used to detect button press events of the FoxG20
  Board on-board push button and execute an arbitrary shell command.
@@ -15,6 +15,16 @@ Files:
   result in a reboot, a long button press in system shutdown.
 
 Installation:
-  
+  - Download files or clone via GIT from https://github.com/ondrej1024/foxg20
+    directly onto your FoxG20
+  - Build on the FoxG20:
+    # gcc -o foxbtn-exec foxbtn-exec.c
+  - Copy executable file into /usr/bin :
+    # cp foxbtn-exec /usr/bin
+  - Copy init script into /etc/init.d :
+    # cp foxg20_btn_exec /etc/init.d
+  - Start service
+    # service foxg20_btn_exec start
+
 Author:
   Ondrej Wisniewski (ondrej.wisniewski@gmail.com)
