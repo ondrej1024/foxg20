@@ -69,12 +69,15 @@ void dhtSetup(uint8_t pin, DHT_MODEL_t model);
 void dhtCleanup();
 void resetTimer();
 
+void readSensor();
+
 float getTemperature();
 float getHumidity();
 
 DHT_ERROR_t getStatus();
 const char* getStatusString();
 
+#if 0
 DHT_MODEL_t getModel() { return sensor_model; }
 
 int getMinimumSamplingPeriod() { return sensor_model == DHT11 ? 1000 : 2000; }
@@ -87,9 +90,8 @@ int8_t getNumberOfDecimalsHumidity() { return 0; };
 int8_t getLowerBoundHumidity() { return sensor_model == DHT11 ? 20 : 0; };
 int8_t getUpperBoundHumidity() { return sensor_model == DHT11 ? 90 : 100; };
 
-//static float toFahrenheit(float fromCelcius) { return 1.8 * fromCelcius + 32.0; };
-//static float toCelsius(float fromFahrenheit) { return (fromFahrenheit - 32.0) / 1.8; };
-
-void readSensor();
+static float toFahrenheit(float fromCelcius) { return 1.8 * fromCelcius + 32.0; };
+static float toCelsius(float fromFahrenheit) { return (fromFahrenheit - 32.0) / 1.8; };
+#endif
 
 #endif /*dht_h*/

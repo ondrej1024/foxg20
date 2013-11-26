@@ -22,6 +22,23 @@
   
   Changelog:
    18-10-2013: Initial version (porting from arduino-DHT)
+
+ ******************************************************************
+   
+  This program is free software; you can redistribute it and/or
+  modify it under the terms of the GNU General Public License
+  as published by the Free Software Foundation; either version 2
+  of the License, or (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software Foundation,
+  Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+   
  ******************************************************************/
 
 #include <stdio.h>
@@ -35,7 +52,7 @@
 
 #include "dht.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 #define EXPORT_FILE    "/sys/class/gpio/export"
 #define UNEXPORT_FILE  "/sys/class/gpio/unexport"
@@ -312,40 +329,58 @@ void resetTimer()
 /*********************************************************************
  * Function:    getHumidity()
  * 
- * Description: 
+ * Description: get humidity value read with latest readSensor()
  * 
  * Parameters:  none
  * 
- * Return:
+ * Return:      relative humidity in %
  * 
  ********************************************************************/
 float getHumidity()
 {
-  //readSensor();
   return humidity;
 }
 
 /*********************************************************************
  * Function:    getTemperature()
  * 
- * Description: 
+ * Description: get temperature value read with latest readSensor()
  * 
  * Parameters:  none
  * 
- * Return:
+ * Return:      temperature in °C
  * 
  ********************************************************************/
 float getTemperature()
 {
-  //readSensor();
   return temperature;
 }
 
+/*********************************************************************
+ * Function:    getStatus()
+ * 
+ * Description: get latest error code
+ * 
+ * Parameters:  none
+ * 
+ * Return:      error_code
+ * 
+ ********************************************************************/
 DHT_ERROR_t getStatus() 
 { 
    return error_code; 
 }
 
+/*********************************************************************
+ * Function:    getStatusString()
+ * 
+ * Description: get latest error string
+ * 
+ * Parameters:  none
+ * 
+ * Return:      error desciption
+ * 
+ ********************************************************************/
 const char* getStatusString()
 {
   switch ( error_code ) 
@@ -372,19 +407,21 @@ const char* getStatusString()
  * 
  * Parameters:  none
  * 
- * Return:
- * 
+ * Return:      sets the following global variables:
+ *              - error_code
+ *              - temperature
+ *              - humidity
  ********************************************************************/
 void readSensor()
 {
   long startTime = micros();
-  int8_t i; 
+  int8_t   i; 
   uint32_t k;
-  uint8_t age;
+  uint8_t  age;
   uint16_t rawHumidity=0;
   uint16_t rawTemperature=0;
   uint16_t data=0;
-  long t1, t2, t3, t4;
+  long t1, t2, t3, t4; // debug info
 
 #if 0
   // Make sure we don't poll the sensor too often
@@ -419,7 +456,6 @@ void readSensor()
   t2 = micros(); 
   pinMode(INPUT);
   t3 = micros(); 
-  
 
   // We're going to read 83 edges:
   // - First a FALLING, RISING, and FALLING edge for the start bit
@@ -436,13 +472,13 @@ void readSensor()
       age = (uint8_t)(micros() - startTime);
       if ( age > MAX_BIT_LENGTH ) {
         // pulse length for single bit has timed out
-        error_code = ERROR_TIMEOUT;
+        t4 = micros(); 
 #if DEBUG
         printf("i=%d, k=%lu, age=%u, data_pin=%u, data=0x%08X\n", 
                 i, k, age, digitalRead(), data);
-        t4 = micros(); 
         printf("dt2=%ld, dt3=%ld, dt4=%ld\n", t2-t1, t3-t2, t4-t3);
 #endif
+        error_code = ERROR_TIMEOUT;
         return;
       }
       // sleep 10us
@@ -454,7 +490,7 @@ void readSensor()
       // Now we are being fed our 40 bits
       data <<= 1;
 
-      // A zero max 30 usecs, a one at least 68 usecs.
+      // A zero lasts max 30 usecs, a one at least 68 usecs.
       if ( age > MAX_PULSE_LENGTH_ZERO ) {
         data |= 1; // we got a one
       }
@@ -474,15 +510,15 @@ void readSensor()
   
   // Verify checksum
   if ( (uint8_t)(((uint8_t)rawHumidity) + (rawHumidity >> 8) + ((uint8_t)rawTemperature) + (rawTemperature >> 8)) != data ) {
-    error_code = ERROR_CHECKSUM;
 #if DEBUG
-  printf("data_pin=%d, data=0x%04X%04X%02X\n", 
-          digitalRead(), rawHumidity, rawTemperature, data);
+    printf("data_pin=%d, data=0x%04X%04X%02X\n", 
+            digitalRead(), rawHumidity, rawTemperature, data);
 #endif
+    error_code = ERROR_CHECKSUM;
     return;
   }
 
-  // Store readings
+  // Convert raw readings and store in global variables
   if ( sensor_model == DHT11 ) {
     humidity = rawHumidity >> 8;
     temperature = rawTemperature >> 8;
@@ -498,27 +534,3 @@ void readSensor()
 
   error_code = ERROR_NONE;
 }
-
-
-#if 0
-int main(void)
-{
-  dhtSetup(DATA_PIN_ID, DHT22);
-
-  readSensor();
-  
-  if (error_code == ERROR_NONE)
-  {  
-    printf("RH: %3.1f\n", humidity);
-    printf("T:  %3.1f\n", temperature);
-  }
-  else
-  {  
-    printf("Error code: %s\n", getStatusString());
-  }
-  
-  dhtCleanup();
-  
-  return 0;
-}
-#endif

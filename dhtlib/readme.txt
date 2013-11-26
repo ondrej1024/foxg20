@@ -1,5 +1,3 @@
-DHTlib
-======
 
 Description:
 
@@ -9,7 +7,7 @@ Description:
   Author: Ondrej Wisniewski
   
   Features:
-  - Support for DHT11 and DHT22/AM2302/RHT03 sensors
+  - Support for DHT11 and DHT22/AM2302/RHT03
   - Auto detect sensor model
 
   Based on code for Arduino from Mark Ruys, mark@paracas.nl
@@ -18,7 +16,7 @@ Description:
  
 Installation:
   
-  Get source code from Github:
+  Get source code form Github:
   git clone ...
 
   Build library:
@@ -41,8 +39,7 @@ Known issues:
   length of around 50us there are timing issues with this approach which means
   in some occasions the sensor reading will fail (timeout or checksum error).
   However it is enough to retry the read operation which will most likely 
-  succeed this time. 
-  An alternative solution to the current implementation is using memory mapped 
-  access to GPIO which might be faster than sysfs.
+  succeed this time.
   A proper solution to this problem would be to write a Kernel driver, like
-  for the DS1820 1-wire temperature sensor. 
+  for the DS28 1-wire temperature sensor.
+
