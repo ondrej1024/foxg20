@@ -22,6 +22,7 @@
   
   Changelog:
    18-10-2013: Initial version (porting from arduino-DHT)
+   17-03-2014: Added functions for sensor power switching
 
  ******************************************************************
    
@@ -52,6 +53,7 @@
 
 #include "dht.h"
 
+// Debug mode: set to 1 to print debug information
 #define DEBUG 0
 
 #define EXPORT_FILE    "/sys/class/gpio/export"
@@ -312,6 +314,161 @@ void dhtCleanup(void)
 }
 
 /*********************************************************************
+ * Function: dhtPoweron()
+ * 
+ * Description: Power on the sensor via a dedicated GPIO pin
+ * 
+ * Parameters: pin - Kernel Id of GPIO pin used for sensor power
+ * 
+ ********************************************************************/
+void dhtPoweron(uint8_t pin)
+{
+  int fd;
+  char b[64];
+  
+  // Prepare GPIO pin connected to sensors data pin to be used with GPIO sysfs
+  // (export to user space)
+  fd = open(EXPORT_FILE, O_WRONLY);
+  if (fd < 0) {
+    perror(EXPORT_FILE);
+    error_code = ERROR_OTHER;
+    return;
+  }  
+  snprintf(b, sizeof(b), "%d", pin);
+  if (pwrite(fd, b, strlen(b), 0) < 0) {
+    fprintf(stderr, "Unable to export pin=%d (already in use?): %s\n",
+            pin, strerror(errno));
+    error_code = ERROR_OTHER;
+    return;
+  }  
+  close(fd);
+  
+  // Define gpio direction to "out"
+  snprintf(b, sizeof(b), "%s%d/direction", GPIO_BASE_FILE, pin);
+  fd = open(b, O_RDWR);
+  if (fd < 0) {
+    fprintf(stderr, "Open %s: %s\n", b, strerror(errno));
+    error_code = ERROR_OTHER;
+    return;
+  }
+  if (pwrite(fd, "out", 4, 0) < 0) {
+    fprintf(stderr, "Unable to pwrite to gpio direction for pin %d: %s\n",
+            pin, strerror(errno));
+    error_code = ERROR_OTHER;
+    return;
+  }
+  close(fd);
+  
+  // Set gpio value to "1"
+  snprintf(b, sizeof(b), "%s%d/value", GPIO_BASE_FILE, pin);
+  fd = open(b, O_RDWR);
+  if (fd < 0) {
+    fprintf(stderr, "Open %s: %s\n", b, strerror(errno));
+    error_code = ERROR_OTHER;
+    return;
+  }
+  if (pwrite(fd, "1", 1, 0) != 1) {
+    fprintf(stderr, "Unable to pwrite 1 to gpio value: %s\n",
+                     strerror(errno));
+    error_code = ERROR_OTHER;
+    return;
+  }
+  close(fd);
+  sleep(1);
+  error_code = ERROR_NONE;
+}
+
+/*********************************************************************
+ * Function: dhtPoweroff()
+ * 
+ * Description: Power off the sensor via a dedicated GPIO pin
+ * 
+ * Parameters: pin - Kernel Id of GPIO pin used for sensor power
+ * 
+ ********************************************************************/
+void dhtPoweroff(uint8_t pin)
+{
+  int fd;
+  char b[64];
+  
+  // Set gpio value to "0"
+  snprintf(b, sizeof(b), "%s%d/value", GPIO_BASE_FILE, pin);
+  fd = open(b, O_RDWR);
+  if (fd < 0) {
+    fprintf(stderr, "Open %s: %s\n", b, strerror(errno));
+    error_code = ERROR_OTHER;
+    return;
+  }
+  if (pwrite(fd, "0", 1, 0) != 1) {
+    fprintf(stderr, "Unable to pwrite 0 to gpio value: %s\n",
+                     strerror(errno));
+    error_code = ERROR_OTHER;
+    return;
+  }
+  close(fd);    
+  
+  // free GPIO pin connected to sensors power pin to be used with GPIO sysfs  
+  fd = open(UNEXPORT_FILE, O_WRONLY);
+  if (fd < 0) {
+    perror(UNEXPORT_FILE);
+    error_code = ERROR_OTHER;
+    return;
+  } 
+  snprintf(b, sizeof(b), "%d", pin);
+  if (pwrite(fd, b, strlen(b), 0) < 0) {
+    fprintf(stderr, "Unable to unexport pin=%d: %s\n",
+            pin, strerror(errno));
+    error_code = ERROR_OTHER;
+    return;
+  }
+  close(fd);
+  error_code = ERROR_NONE;
+}
+
+/*********************************************************************
+ * Function: dhtReset()
+ * 
+ * Description: Reset the sensor by powering it off for 1s
+ * 
+ * Parameters: pin - Kernel Id of GPIO pin used for sensor power
+ * 
+ ********************************************************************/
+void dhtReset(uint8_t pin)
+{
+  int fd;
+  char b[64];
+  
+  snprintf(b, sizeof(b), "%s%d/value", GPIO_BASE_FILE, pin);
+  fd = open(b, O_RDWR);
+  if (fd < 0) {
+    fprintf(stderr, "Open %s: %s\n", b, strerror(errno));
+    error_code = ERROR_OTHER;
+    return;
+  }
+  // Set gpio value to "0"
+  if (pwrite(fd, "0", 1, 0) != 1) {
+    fprintf(stderr, "Unable to pwrite 0 to gpio value: %s\n",
+                     strerror(errno));
+    error_code = ERROR_OTHER;
+    return;
+  }
+  
+  // wait 1 sec
+  sleep(1);
+  
+  // Set gpio value to "1"
+  if (pwrite(fd, "1", 1, 0) != 1) {
+    fprintf(stderr, "Unable to pwrite 0 to gpio value: %s\n",
+                     strerror(errno));
+    error_code = ERROR_OTHER;
+    return;
+  }
+  
+  close(fd);
+  error_code = ERROR_NONE;
+}
+
+/*********************************************************************
  * Function:    resetTimer()
  * 
  * Description: 
@@ -421,7 +578,9 @@ void readSensor()
   uint16_t rawHumidity=0;
   uint16_t rawTemperature=0;
   uint16_t data=0;
+#if DEBUG
   long t1, t2, t3, t4; // debug info
+#endif
 
 #if 0
   // Make sure we don't poll the sensor too often
@@ -443,7 +602,9 @@ void readSensor()
   usleep(INIT_DELAY);
   
   digitalWrite(LOW); // Send start signal
+#if DEBUG
   t1 = micros(); 
+#endif
   if ( sensor_model == DHT11 ) {
     usleep(DHT11_START_DELAY);
   }
@@ -453,9 +614,13 @@ void readSensor()
   }
   
   digitalWrite(HIGH); // Switch bus to receive data
+#if DEBUG
   t2 = micros(); 
+#endif
   pinMode(INPUT);
+#if DEBUG
   t3 = micros(); 
+#endif
 
   // We're going to read 83 edges:
   // - First a FALLING, RISING, and FALLING edge for the start bit
@@ -472,8 +637,8 @@ void readSensor()
       age = (uint8_t)(micros() - startTime);
       if ( age > MAX_BIT_LENGTH ) {
         // pulse length for single bit has timed out
-        t4 = micros(); 
 #if DEBUG
+        t4 = micros(); 
         printf("i=%d, k=%lu, age=%u, data_pin=%u, data=0x%08X\n", 
                 i, k, age, digitalRead(), data);
         printf("dt2=%ld, dt3=%ld, dt4=%ld\n", t2-t1, t3-t2, t4-t3);

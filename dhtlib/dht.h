@@ -19,6 +19,8 @@
 
   Changelog:
    18-10-2013: Initial version (porting from arduino-DHT)
+   17-03-2014: Added function prototypes for sensor power switching
+   
  ******************************************************************/
 
 #ifndef dht_h
@@ -68,6 +70,9 @@ static uint32_t last_read_time;
 void dhtSetup(uint8_t pin, DHT_MODEL_t model);
 void dhtCleanup();
 void resetTimer();
+void dhtPoweron(uint8_t pin);
+void dhtPoweroff(uint8_t pin);
+void dhtReset(uint8_t pin);
 
 void readSensor();
 
