@@ -1,0 +1,18 @@
+#! /bin/bash
+##################################################################################
+#
+# Author:        Ondrej Wisniewski
+#
+# Description:   Start the Wifi watchdog script wifi-wd.sh
+#
+# Usage:         This script is called automatically when a network interface 
+#                comes up by placing it in /etc/init.d/network/ifup.d/
+#
+# Last modified: 18/06/2014
+#
+##################################################################################
+
+export IFACE=$IFACE
+/usr/local/bin/wifi-wd.sh &
+
+exit 0
