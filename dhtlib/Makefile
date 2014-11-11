@@ -29,7 +29,7 @@ LIBS    =
 # Should not alter anything below this line
 ###############################################################################
 
-SRC	=	dht.c
+SRC	=	dht.c dht_spi.c dht_gpio.c
 
 OBJ	=	$(SRC:.c=.o)
 
