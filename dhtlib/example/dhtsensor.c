@@ -11,6 +11,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -30,9 +31,10 @@ int main(int argc, char* argv[])
    /* Parse command line */
    switch (argc)
    {   
+      case 2:  /* 1 paramters provided */
       case 3:  /* 2 paramters provided */
       case 4:  /* 3 paramters provided */
-         /* Get sensor type */ 
+         /* Get first parameter: sensor type */ 
          if (strcmp(argv[1], "DHT11")==0) model = DHT11;
          else if (strcmp(argv[1], "DHT22")==0) model = DHT22;
          else
@@ -41,9 +43,14 @@ int main(int argc, char* argv[])
             return -1;
          }
 
-         /* Get Kernel Id of data pin */
-         data_pin = atoi(argv[2]);
+         /* Get second parameter: data pin */ 
+         if (argc==3)
+         {
+            /* Get Kernel Id of data pin */
+            data_pin = atoi(argv[2]);
+         }
          
+         /* Get third parameter: power pin */ 
          if (argc==4)
          {
             /* Get Kernel Id of power pin */
@@ -52,11 +59,11 @@ int main(int argc, char* argv[])
       break;
       
       default: /* print help message */
-         printf("dhtsensor - read temperature and humidity data from DHT11 and DHT22 sensors\n");
-         printf(" usage: dhtsensor <sensor type> <data pin> [<power pin>]\n");
-         printf("          sensor type: DHT11|DHT22 (default DHT22)\n");
-         printf("          data pin:    Kernel Id of GPIO data pin\n");
-         printf("          power pin:   Kernel Id of GPIO power pin\n");
+         printf("dhtsensor - read temperature and humidity data from DHT11 and DHT22 sensors\n\n");
+         printf("Usage: dhtsensor <sensor type> [<data pin>] [<power pin>]\n");
+         printf("       sensor type: DHT11|DHT22 \n");
+         printf("       data pin:    Kernel Id of GPIO data pin (not needed for SPI communication mode)\n");
+         printf("       power pin:   Kernel Id of GPIO power pin (optional)\n");
          return -1;
    }
 
@@ -83,7 +90,7 @@ int main(int argc, char* argv[])
       }
       else
       {
-         usleep(1000000);
+         sleep(2);
       }
    }
    while ((getStatus() != ERROR_NONE) && retry--);
