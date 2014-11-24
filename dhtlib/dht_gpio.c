@@ -19,7 +19,10 @@
    18-10-2013: Initial version (porting from arduino-DHT)
    17-03-2014: Added functions for sensor power switching
    11-11-2014: Moved the GPIO specific functions into their own file
-
+   24-11-2014: Changed handling of sysfs filenames to support different 
+               namig schemes used by various micro processors and
+               kernel versions
+               
 ************************************************************************/
 
 #include <stdio.h>
@@ -36,9 +39,14 @@
 // Debug mode: set to 1 to print debug information
 #define DEBUG 0
 
+// For systems not using the standard GPIO sysfs naming scheme
+// /sys/class/gpio/gpio<N> 
+// uncomment the line referring to your system
+//#define AT91_SYSFS
+
+#define GPIO_BASE_DIR  "/sys/class/gpio"
 #define EXPORT_FILE    "/sys/class/gpio/export"
 #define UNEXPORT_FILE  "/sys/class/gpio/unexport"
-#define GPIO_BASE_FILE "/sys/class/gpio/gpio"
 
 // timing parameters for serial bit detection
 // (numbers are in microseconds)
@@ -170,6 +178,40 @@ static long micros(void)
 }
 
 /*********************************************************************
+ * Function:    sysfs_filename()
+ * 
+ * Description: Assembles the filename of the GPIO sysfs file
+ *              associated to the pin number and function.
+ *              
+ *              The standard naming scheme according to kernel 
+ *              documentation is the following:
+ *              /sys/class/gpio/gpio<id>/<function>
+ * 
+ *              However this seems to differ depending on the 
+ *              used micro processor and kernel version.
+ * 
+ * Parameters:  filename (out): complete name of sysfs file
+ *              len (in)      : length of the filename buffer
+ *              pin (in)      : GPIO Kernel Id of used IO pin
+ *              function (in) : name of GPIO function
+ * 
+ * Return:      none
+ * 
+ ********************************************************************/
+static void sysfs_filename(char *filename, int len, int pin, const char *function)
+{
+#ifdef AT91_SYSFS
+  // Use the naming scheme for AT91 micro processor family
+  snprintf(filename, len, "%s/pio%c%d/%s", GPIO_BASE_DIR, 'A'+pin/32, pin%32, function);
+#else
+  // Use the standard naming scheme
+  snprintf(filename, len, "%s/gpio%d/%s", GPIO_BASE_DIR, pin, function);
+#endif
+  // Note: might need to add more naming schemes here
+}
+  
+
+/*********************************************************************
  * PUBLIC FUNCTIONS
  ********************************************************************/
 
@@ -192,7 +234,6 @@ void dhtSetup_gpio(uint8_t pin, DHT_MODEL_t model)
   sensor_model = model;
   resetTimer(); // Make sure we do read the sensor in the next readSensor()
 
-  
   // Prepare GPIO pin connected to sensors data pin to be used with GPIO sysfs
   // (export to user space)
   fd = open(EXPORT_FILE, O_WRONLY);
@@ -209,26 +250,9 @@ void dhtSetup_gpio(uint8_t pin, DHT_MODEL_t model)
     return;
   }  
   close(fd);
-
-  // Define edge interrupt (both edges)  
-  // to be used later with the poll() function for fast edge detection
-  snprintf(b, sizeof(b), "%s%d/edge", GPIO_BASE_FILE, pin);
-  fd = open(b, O_RDWR);
-  if (fd < 0) {
-    fprintf(stderr, "Open %s: %s\n", b, strerror(errno));
-    error_code = ERROR_OTHER;
-    return;
-  }
-  if (pwrite(fd, "both", 4, 0) < 0) {
-    fprintf(stderr, "Unable to write 'both' to edge_fd: %s\n",
-            strerror(errno));
-    error_code = ERROR_OTHER;
-    return;
-  }
-  close(fd);
   
   // Open gpio direction file for fast reading/writing when requested
-  snprintf(b, sizeof(b), "%s%d/direction", GPIO_BASE_FILE, pin);
+  sysfs_filename(b, sizeof(b), pin, "direction");
   fd = open(b, O_RDWR);
   if (fd < 0) {
     fprintf(stderr, "Open %s: %s\n", b, strerror(errno));
@@ -238,7 +262,7 @@ void dhtSetup_gpio(uint8_t pin, DHT_MODEL_t model)
   direction_fd=fd;
   
   // Open gpio value file for fast reading/writing when requested
-  snprintf(b, sizeof(b), "%s%d/value", GPIO_BASE_FILE, pin);
+  sysfs_filename(b, sizeof(b), pin, "value");
   fd = open(b, O_RDWR);
   if (fd < 0) {
     fprintf(stderr, "Open %s: %s\n", b, strerror(errno));
@@ -388,7 +412,7 @@ void readSensor_gpio()
 #if DEBUG
         t4 = micros(); 
         printf("i=%d, k=%lu, age=%u, data_pin=%u, data=0x%08X\n", 
-                i, k, age, digitalRead(), data);
+                i, (long unsigned int)k, age, digitalRead(), data);
         printf("dt2=%ld, dt3=%ld, dt4=%ld\n", t2-t1, t3-t2, t4-t3);
 #endif
         error_code = ERROR_TIMEOUT;
