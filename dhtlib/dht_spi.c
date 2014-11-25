@@ -18,6 +18,7 @@
   
   Changelog:
    11-11-2014: Initial version (porting and integrating Daniels code)
+   24-11-2014: Added support for DHT11 sensor
 
 ************************************************************************/
 
@@ -250,6 +251,8 @@ void dhtSetup_spi(DHT_MODEL_t model)
 {
    int ret = 0;
    
+   sensor_model = model;
+   
    /* Open SPI device */
    fd = open(device, O_RDWR);
    if (fd < 0)
@@ -326,11 +329,32 @@ void readSensor_spi(int argc, char *argv[])
    uint8_t checksum=0;
    int i;
    int ret;
+   float start_delay=0;
       
-   
-   if (sensor_model==AUTO_DETECT)
-   { /* Do something */ }
+   /* Define sensor specific parameters */
+   switch (sensor_model)
+   {
+      case DHT11:
+         start_delay = 20.0/1000; // 20ms
+      break;
       
+      case DHT22:
+      case AM2302:
+      case RHT03:
+         sensor_model = DHT22;
+         start_delay = 1.0/1000;  // 1ms
+      break;
+      
+      case AUTO_DETECT:
+         /* TODO: do something */ 
+      break;
+      
+      default:
+         fprintf(stderr, "ERROR: Unknown sensor model %d\n", sensor_model);
+         error_code = ERROR_OTHER;
+         return;      
+   }
+         
    if (last_read_time == 0)
    { /* Do something */ }
    
@@ -339,19 +363,20 @@ void readSensor_spi(int argc, char *argv[])
    
    /* 
     * The whole communication process with the sensor should not 
-    * exceed 6ms (init sequence + 5ms of data response)
-    * To be on the save side we create a byte array for 8ms of data 
+    * exceed duration of init sequence + 5ms of data response
+    * We create a byte array big enough to contain all data bits 
     */
-   int num_bits  =  (int)(0.008 * speed);
+   float comm_period = start_delay + 6.0/1000;
+   int num_bits  =  (int)(comm_period * speed);
    int num_bytes =  num_bits / bits;
    uint8_t *spi_data = (uint8_t *)malloc(num_bytes);
-
+   
    /* 
-    * Define data request to DHT22:
-    *   - start for 1.5ms with 0 (min 1ms),
-    *   - then switch to 1 to wait for the response
+    * Define data request to sensor:
+    *   - start for <start_delay> with 0 (Low)
+    *   - then switch to 1 (High) to wait for the response
     */
-   int start_offset = (int)(0.0015 * speed) / bits;
+   int start_offset = (int)(start_delay * speed) / bits;
    memset(spi_data, 0, start_offset);
    memset(&spi_data[start_offset], 0xff, num_bytes-start_offset);
 
@@ -369,6 +394,17 @@ void readSensor_spi(int argc, char *argv[])
       return;
    }
    
+   /* DEBUG
+   printf("start_delay: %f\n", start_delay);
+   printf("comm_period: %f\n", comm_period);
+   printf("num_bits: %d\n", num_bits);
+   printf("num_bytes: %d\n", num_bytes);
+   printf("start_offset: %d\n", start_offset);
+   printf("Data: ");
+   for (i=0; i<=RSP_DATA_SIZE-1; i++) printf("%02X ", sensor_data[i]);
+   printf("\n");
+   */
+      
    /* Checksum validation */
    for (i=0; i<RSP_DATA_SIZE-1; i++)
       checksum += sensor_data[i];
@@ -379,10 +415,18 @@ void readSensor_spi(int argc, char *argv[])
    }
    
    /* Calculate temperature and humidity values from raw data */
-   humidity = ((uint16_t)sensor_data[0]<<8 | sensor_data[1])/10.0;
-   temperature = ((uint16_t)(sensor_data[2] & 0x7f)<<8 | sensor_data[3])/10.0;
-   if((sensor_data[2] & 0x80)== 0x80)
-      temperature = -(temperature);
-
+   if ( sensor_model == DHT11 ) 
+   {
+      humidity = (float)sensor_data[0];
+      temperature = (float)sensor_data[2];
+   }
+   else
+   {
+      humidity = ((uint16_t)sensor_data[0]<<8 | sensor_data[1])/10.0;
+      temperature = ((uint16_t)(sensor_data[2] & 0x7f)<<8 | sensor_data[3])/10.0;
+      if((sensor_data[2] & 0x80)== 0x80)
+         temperature = -(temperature);
+   }
+   
    error_code = ERROR_NONE;
 }
