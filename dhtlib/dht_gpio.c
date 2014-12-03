@@ -158,8 +158,8 @@ static long micros(void)
   
 
   /* clock_gettime() needs '-lrt' on the link line */
-  if (clock_gettime(CLOCK_REALTIME, &now_ts) < 0) {
-      fprintf(stderr, "clock_gettime(CLOCK_REALTIME) failed: %s\n",
+  if (clock_gettime(CLOCK_MONOTONIC, &now_ts) < 0) {
+      fprintf(stderr, "clock_gettime(CLOCK_MONOTONIC) failed: %s\n",
               strerror(errno));
       return 0;
   }
@@ -175,6 +175,29 @@ static long micros(void)
   
   // convert to micro seconds
   return nsec/1000;
+}
+
+/*********************************************************************
+ * Function:    check_clkres()
+ * 
+ * Description: Checks the available clock resolution and issues
+ *              a warning when it is not good enough (>1ms).
+ *              This happens with kernels that don't have
+ *              CONFIG_HIGH_RES_TIMERS option enabled.
+ * 
+ * Parameters:  none
+ * 
+ * Return:      none
+ * 
+ ********************************************************************/
+static void check_clkres(void)
+{
+  struct timespec res_ts;
+  clock_getres(CLOCK_MONOTONIC, &res_ts);
+  if (res_ts.tv_nsec > 1000) {
+    fprintf(stderr, "WARNING: clock resolution (%uns) is not good enough on you system\n", 
+                    (unsigned int)res_ts.tv_nsec);
+  }
 }
 
 /*********************************************************************
@@ -367,7 +390,10 @@ void readSensor_gpio()
 
   temperature = 0;
   humidity = 0;
- 
+
+  // Check clock resolution
+  check_clkres();
+  
   // Request sample
   pinMode(OUTPUT);  
   digitalWrite(HIGH); // Init
