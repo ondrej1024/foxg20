@@ -57,11 +57,17 @@
 
 #include "dht.h"
 
+// Debug mode: set to 1 to print debug information
+#define DEBUG 0
+
 #define RSP_DATA_SIZE 5
 #define MAX_PULSE_LENGTH_ZERO 40 // 26-28us
 #define MAX_PULSE_LENGTH_ONE  80 // 70us
 #define MIN_BIT_LENGTH 5
 #define MAX_BIT_LENGTH MAX_PULSE_LENGTH_ONE
+
+#define SPIDEV1 "/dev/spidev0.0"
+#define SPIDEV2 "/dev/spidev32766.0"
 
 /* Imported variables */
 extern float temperature;
@@ -71,10 +77,12 @@ extern DHT_ERROR_t error_code;
 extern uint32_t last_read_time;
 
 /* SPI protocol settings */
-static const char *device = "/dev/spidev0.0";
+static const char *spidev1 = SPIDEV1;
+static const char *spidev2 = SPIDEV2;
 static uint8_t  mode  = SPI_MODE_0;
+static uint32_t speed = 550000;
+
 static uint8_t  bits  = 8;
-static uint32_t speed = 500000;
 static uint16_t delay = 0;
 
 static int fd=0;
@@ -165,7 +173,7 @@ static int get_pulse_length(uint8_t* data_buf, int* bit_idx, int max_bit)
          
          /* Return current bit index and pulse length in usec */
          *bit_idx = i;
-         return ((int)(1000000.0 * bit_delta / speed));
+         return ((int)((1000000.0 * bit_delta) / speed));
       }
    }
    
@@ -253,14 +261,21 @@ void dhtSetup_spi(DHT_MODEL_t model)
    
    sensor_model = model;
    
-   /* Open SPI device */
-   fd = open(device, O_RDWR);
+   /* Open SPI device:
+    * SPI device name depends on the platform we are running on. 
+    * We just try all known device names.
+    */
+   fd = open(spidev1, O_RDWR);
    if (fd < 0)
    {
-      fprintf(stderr, "ERROR: Can't open device %s: %s\n",
-                       device, strerror(errno));
-      error_code = ERROR_OTHER;
-      return;
+      fd = open(spidev2, O_RDWR);
+      if (fd < 0)
+      {
+         fprintf(stderr, "ERROR: Can't open spi device: %s\n",
+                          strerror(errno));
+         error_code = ERROR_OTHER;
+         return;
+      }
    }
    
    /* Set SPI mode */
@@ -335,14 +350,14 @@ void readSensor_spi(int argc, char *argv[])
    switch (sensor_model)
    {
       case DHT11:
-         start_delay = 20.0/1000; // 20ms
+         start_delay = 12.0/1000; // 30ms (12ms for Arietta)
       break;
       
       case DHT22:
       case AM2302:
       case RHT03:
          sensor_model = DHT22;
-         start_delay = 1.0/1000;  // 1ms
+         start_delay = 0.8/1000;  // 1.5ms (0.8ms for Arietta)
       break;
       
       case AUTO_DETECT:
@@ -376,13 +391,41 @@ void readSensor_spi(int argc, char *argv[])
     *   - start for <start_delay> with 0 (Low)
     *   - then switch to 1 (High) to wait for the response
     */
-   int start_offset = (int)(start_delay * speed) / bits;
+   int start_offset = (int)((start_delay * speed) / bits);
    memset(spi_data, 0, start_offset);
    memset(&spi_data[start_offset], 0xff, num_bytes-start_offset);
 
+#if DEBUG   
+   printf("\n");
+   printf("speed: %d Hz\n", speed);
+   printf("start_delay: %f\n", start_delay);
+   printf("comm_period: %f\n", comm_period);
+   printf("num_bits: %d\n", num_bits);
+   printf("num_bytes: %d\n", num_bytes);
+   printf("start_offset: %d (%f s)\n", start_offset, start_offset*bits/(float)speed);
+
+   printf("\nREQUEST");
+   for (i=0; i<num_bytes; i++)
+   {
+      if((i%100)==0) printf("\n%03d ", i);
+      printf("%02X",spi_data[i]);
+   }
+   printf("\n");
+#endif
+   
    /* Perform the data transfer */
    spi_data_transfer(fd, spi_data, num_bytes);
         
+#if DEBUG   
+   printf("\nRESPONSE");
+   for (i=0; i<num_bytes; i++)
+   {
+      if((i%100)==0) printf("\n%03d ", i);
+      printf("%02X",spi_data[i]);
+   }
+   printf("\n");
+#endif
+   
    /* Decode the sensor response */
    ret = decode_data(spi_data, sensor_data, num_bits);
    free(spi_data);
@@ -394,17 +437,6 @@ void readSensor_spi(int argc, char *argv[])
       return;
    }
    
-   /* DEBUG
-   printf("start_delay: %f\n", start_delay);
-   printf("comm_period: %f\n", comm_period);
-   printf("num_bits: %d\n", num_bits);
-   printf("num_bytes: %d\n", num_bytes);
-   printf("start_offset: %d\n", start_offset);
-   printf("Data: ");
-   for (i=0; i<=RSP_DATA_SIZE-1; i++) printf("%02X ", sensor_data[i]);
-   printf("\n");
-   */
-      
    /* Checksum validation */
    for (i=0; i<RSP_DATA_SIZE-1; i++)
       checksum += sensor_data[i];
