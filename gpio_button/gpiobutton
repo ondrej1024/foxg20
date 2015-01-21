@@ -1,0 +1,50 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:          	gpiobutton
+# Required-Start:	$remote_fs $syslog
+# Required-Stop:	$remote_fs $syslog
+# Default-Start:	2 3 4 5
+# Default-Stop:		
+# Short-Description: Manage a push button connected via GPIO line
+### END INIT INFO
+
+
+NAME=gpiobuttond
+PROG=/usr/bin/$NAME
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+PIDFILE=/var/run/$NAME
+
+# You can specify 2 different commands for short and long button press
+# you want to be triggered when pressing the button (any shell command 
+# can be specified)
+# COMMAND1 is executed at a short button press (< 3s)
+# COMMAND2 is executed at a long button press (> 3s)
+COMMAND1="reboot"
+COMMAND2="poweroff"
+
+# This is the Kernel ID of the GPIO pin connected to the push button
+GPIOPIN=81 # AriettaG25
+
+OPTS="$GPIOPIN $COMMAND1 $COMMAND2"
+
+. /lib/init/vars.sh
+. /lib/lsb/init-functions
+
+case "$1" in
+    start)
+	echo "Start push button monitoring"
+	start-stop-daemon --start --quiet --background --oknodo --make-pidfile --pidfile $PIDFILE --exec $PROG -- $OPTS
+        ;;
+    restart|reload|force-reload)
+        echo "Error: argument '$1' not supported" >&2
+        exit 3
+        ;;
+    stop)
+	echo "Stop push button monitoring"
+	start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE
+	;;
+    *)
+        echo "Usage: $0 start|stop" >&2
+        exit 3
+        ;;
+esac
